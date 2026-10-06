@@ -1,0 +1,53 @@
+    1  sudo apt-get update
+    2  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wireshark tshark
+    3  mkdir -p ~/Lab2
+    4  sudo ip netns add client
+    5  sudo ip netns add server
+    6  sudo ip link add c0 type veth peer name s0
+    7  sudo ip link set c0 netns client
+    8  sudo ip link set s0 netns server
+    9  sudo ip -n client address add 192.168.10.1/24 dev c0
+   10  sudo ip -n server address add 192.168.10.2/24 dev s0
+   11  sudo ip -n client link set lo up
+   12  sudo ip -n server link set lo up
+   13  sudo ip -n client link set c0 up
+   14  sudo ip -n server link set s0 up
+   15  sudo ip netns list
+   16  sudo ip -n client -br address
+   17  sudo ip -n server -br address
+   18  sudo ip -n client -br link
+   19  sudo ip -n server -br link
+   20  sudo ip -n client neigh flush dev c0
+   21  sudo ip -n server neigh flush dev s0
+   22  sudo ip netns exec client arp -n
+   23  sudo ip -n client neigh show
+   24  test ! -e /tmp/dynamic.pcapng && sudo ip netns exec client dumpcap -i c0 -f 'arp or icmp' -c 8 -w /tmp/dynamic.pcapng &
+   25  sudo ip netns exec client ping -c 3 192.168.10.2
+   26  sudo ip -n client neigh show
+   27  sudo ip netns exec client arp -n
+   28  sudo chown "$USER:$USER" /tmp/dynamic.pcapng
+   29  mv /tmp/dynamic.pcapng ~/Lab2/dynamic.pcapng
+   30  tshark -r ~/Lab2/dynamic.pcapng -n
+   31  SERVER_MAC=$(sudo ip netns exec server cat /sys/class/net/s0/address)
+   32  echo "$SERVER_MAC"
+   33  sudo ip -n client neigh replace 192.168.10.2 lladdr "$SERVER_MAC" nud permanent dev c0
+   34  sudo ip -n client neigh show
+   35  sudo ip netns exec client arp -n
+   36  test ! -e /tmp/static.pcapng && sudo ip netns exec client dumpcap -q -i c0 -f 'arp or icmp' -c 6 -w /tmp/static.pcapng &
+   37  sudo ip netns exec client ping -c 3 192.168.10.2
+   38  sudo ip -n client neigh show
+   39  sudo chown "$USER:$USER" /tmp/static.pcapng
+   40  mv /tmp/static.pcapng ~/Lab2/static.pcapng
+   41  tshark -r ~/Lab2/static.pcapng -n
+   42  echo "ARP packets: $(tshark -r ~/Lab2/static.pcapng -Y arp -T fields -e frame.number | wc -l)"
+   43  echo "ICMP requests: $(tshark -r ~/Lab2/static.pcapng -Y 'icmp.type == 8' -T fields -e frame.number | wc -l)"
+   44  echo "ICMP replies: $(tshark -r ~/Lab2/static.pcapng -Y 'icmp.type == 0' -T fields -e frame.number | wc -l)"
+   45  wireshark -r ~/Lab2/dynamic.pcapng & wireshark -r ~/Lab2/static.pcapng &
+   46  tshark -r ~/Lab2/dynamic.pcapng -Y arp -V
+   47  ls -lh ~/Lab2
+   48  tshark -r ~/Lab2/dynamic.pcapng -n
+   49  tshark -r ~/Lab2/static.pcapng -n
+   50  echo "ARP packets with static entry: $(tshark -r ~/Lab2/static.pcapng -Y arp -T fields -e frame.number | wc -l)"
+   51  echo "ICMP requests: $(tshark -r ~/Lab2/static.pcapng -Y 'icmp.type == 8' -T fields -e frame.number | wc -l)"
+   52  echo "ICMP replies: $(tshark -r ~/Lab2/static.pcapng -Y 'icmp.type == 0' -T fields -e frame.number | wc -l)"
+   53  history > ~/Lab2/history.txt
